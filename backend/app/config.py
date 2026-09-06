@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     redis_url: str = ""  # empty → in-memory fallback
 
-    contact_email: str = "contact@ambern.dev"
+    contact_email: str = "vinicius@ambern.dev"
     api_env: str = "development"
     cors_origins: str = "https://brazil.ambern.dev,http://localhost:3100"
 

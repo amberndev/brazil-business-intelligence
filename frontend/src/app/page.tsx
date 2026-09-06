@@ -58,7 +58,7 @@ const PLANS = [
     quota: "15,000 req/mo",
     features: ["Everything in Starter", "CSV Export", "Market Overview", "Email Support"],
     cta: "Contact Sales",
-    ctaHref: `mailto:${process.env.CONTACT_EMAIL ?? "contact@ambern.dev"}?subject=Pro Plan`,
+    ctaHref: `mailto:${process.env.CONTACT_EMAIL ?? "vinicius@ambern.dev"}?subject=Pro Plan`,
     highlight: true,
   },
   {
@@ -67,7 +67,7 @@ const PLANS = [
     quota: "Unlimited",
     features: ["Everything in Pro", "SLA", "IP Whitelist", "Dedicated Support"],
     cta: "Contact Sales",
-    ctaHref: `mailto:${process.env.CONTACT_EMAIL ?? "contact@ambern.dev"}?subject=Enterprise Plan`,
+    ctaHref: `mailto:${process.env.CONTACT_EMAIL ?? "vinicius@ambern.dev"}?subject=Enterprise Plan`,
     highlight: false,
   },
 ];

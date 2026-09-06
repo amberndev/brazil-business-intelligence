@@ -142,6 +142,22 @@ export default function RootLayout({
               ))}
             </nav>
           )}
+          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <a
+              href="mailto:vinicius@ambern.dev"
+              style={{ color: "var(--muted)", textDecoration: "none", fontSize: "0.8rem" }}
+            >
+              Contact
+            </a>
+            <a
+              href="https://ambern.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--muted)", textDecoration: "none", fontSize: "0.8rem" }}
+            >
+              ambern.dev
+            </a>
+          </div>
           <p style={{ color: "var(--muted)", fontSize: "0.8rem", margin: 0 }}>
             © {new Date().getFullYear()} Ambern. All rights reserved.
           </p>
