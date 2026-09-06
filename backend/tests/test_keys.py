@@ -174,3 +174,33 @@ def test_revoke_key_missing_auth():
     with make_test_client(conn=conn) as (tc, _):
         resp = tc.delete("/v1/keys/me")
     assert resp.status_code == 401
+
+
+# ── F-104: rate-limit headers on every authenticated response ─────────────────
+
+def test_get_key_me_ratelimit_headers():
+    """GET /v1/keys/me must return X-RateLimit-* headers (F-104)."""
+    pro_row = {**_PRO_KEY, "id": str(uuid.uuid4())}
+    conn = make_mock_conn()
+    conn.fetchrow = AsyncMock(side_effect=[pro_row, pro_row])
+    with make_test_client(conn=conn) as (tc, _):
+        resp = tc.get("/v1/keys/me", headers={"X-API-Key": pro_row["key"]})
+    assert resp.status_code == 200
+    assert "X-RateLimit-Limit"     in resp.headers
+    assert "X-RateLimit-Remaining" in resp.headers
+    assert "X-RateLimit-Reset"     in resp.headers
+    assert int(resp.headers["X-RateLimit-Limit"]) == pro_row["requests_limit"]
+
+
+def test_revoke_key_ratelimit_headers():
+    """DELETE /v1/keys/me must return X-RateLimit-* headers (F-104)."""
+    pro_row = {**_PRO_KEY}
+    conn = make_mock_conn()
+    conn.fetchrow = AsyncMock(return_value=pro_row)
+    conn.execute  = AsyncMock(return_value=None)
+    with make_test_client(conn=conn) as (tc, _):
+        resp = tc.delete("/v1/keys/me", headers={"X-API-Key": pro_row["key"]})
+    assert resp.status_code == 204
+    assert "X-RateLimit-Limit"     in resp.headers
+    assert "X-RateLimit-Remaining" in resp.headers
+    assert "X-RateLimit-Reset"     in resp.headers

@@ -23,7 +23,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from ..auth import get_api_key
+from ..auth import get_api_key, set_ratelimit_headers
 from ..cache import cache
 from ..db import get_pool
 from ..hooks import send_welcome_email
@@ -147,6 +147,7 @@ async def generate_key(
 
 @router.get("/keys/me", response_model=None)
 async def get_key_me(
+    response: Response,
     key_info: dict[str, Any] = Depends(get_api_key),
 ) -> dict:
     """Return current key metadata (plan, quota, reset date)."""
@@ -165,13 +166,16 @@ async def get_key_me(
             status_code=401,
             detail={"code": "invalid_api_key", "message": "Key not found.", "status": 401},
         )
+    remaining = key_info["requests_limit"] - key_info["requests_this_month"]
+    set_ratelimit_headers(response, key_info, remaining)
     return _key_info_response(row)
 
 
 @router.delete("/keys/me", status_code=204, response_model=None)
 async def revoke_key_me(
+    response: Response,
     key_info: dict[str, Any] = Depends(get_api_key),
-) -> Response:
+) -> None:
     """Deactivate (revoke) the current key."""
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -179,4 +183,5 @@ async def revoke_key_me(
             "UPDATE product.api_keys SET active = FALSE WHERE key = $1",
             key_info["key"],
         )
-    return Response(status_code=204)
+    remaining = key_info["requests_limit"] - key_info["requests_this_month"]
+    set_ratelimit_headers(response, key_info, remaining)
