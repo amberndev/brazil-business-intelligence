@@ -117,8 +117,9 @@ export async function createFreeApiKey(email: string): Promise<CreateKeyResponse
   }
 
   if (res.status === 201) {
-    const json = (await res.json()) as ApiResponse<{ key: string; plan: string; email: string }>;
-    return { ok: true, key: json.data.key, plan: json.data.plan, email: json.data.email };
+    // Backend returns a flat object (NOT the standard {data:…} envelope)
+    const json = (await res.json()) as { key: string; plan: string; requests_limit: number; message: string };
+    return { ok: true, key: json.key, plan: json.plan, email };
   }
 
   let errBody: ApiError;

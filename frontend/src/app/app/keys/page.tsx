@@ -16,10 +16,10 @@ type CreateState =
   | { status: "error"; code: string; message: string };
 
 function errorForCode(code: string, message: string): string {
-  if (code === "invalid_email") return "Please enter a valid email address.";
-  if (code === "already_active")
+  if (code === "invalid_email" || code === "email_required") return "Please enter a valid email address.";
+  if (code === "duplicate_key" || code === "already_active")
     return "This email already has an active FREE key. Enter it in the field above to save it to your browser.";
-  if (code === "throttled" || code === "rate_limit")
+  if (code === "create_throttled" || code === "throttled" || code === "rate_limit")
     return "Too many requests. Please wait a few minutes and try again.";
   return message || "Something went wrong. Please try again.";
 }
