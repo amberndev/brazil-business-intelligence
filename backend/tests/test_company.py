@@ -274,6 +274,36 @@ def test_compliance_free_plan_forbidden():
     assert resp.json()["error"]["code"] == "plan_forbidden"
 
 
+def test_company_profile_query_uses_split_cnpj_params():
+    """_COMPANY_PROFILE_SQL must be called with 3 separate CNPJ params (not 1 concat)."""
+    import app.db as db_module
+    from app.main import app
+    from fastapi.testclient import TestClient
+
+    conn = make_mock_conn()
+    conn.fetchrow = AsyncMock(side_effect=[KEY_ROW, COMPANY_ROW])
+    pool = make_mock_pool(conn)
+
+    async def _inject():
+        db_module._pool = pool
+
+    async def _noop():
+        db_module._pool = None
+
+    with patch.object(db_module, "create_pool", _inject), \
+         patch.object(db_module, "close_pool", _noop):
+        with TestClient(app, raise_server_exceptions=False) as tc:
+            tc.get(f"/v1/company/{_VALID_CNPJ}", headers={"X-API-Key": KEY_ROW["key"]})
+
+    # Second fetchrow call is _COMPANY_PROFILE_SQL (first is auth key lookup)
+    company_call = conn.fetchrow.call_args_list[1]
+    call_args = company_call[0]  # positional args: (sql, p1, p2, p3)
+    assert len(call_args) == 4, f"Expected SQL + 3 CNPJ params, got {len(call_args)} args"
+    assert call_args[1] == _VALID_CNPJ[:8],   f"cnpj_basico mismatch: {call_args[1]!r}"
+    assert call_args[2] == _VALID_CNPJ[8:12], f"cnpj_ordem mismatch: {call_args[2]!r}"
+    assert call_args[3] == _VALID_CNPJ[12:],  f"cnpj_dv mismatch: {call_args[3]!r}"
+
+
 def test_compliance_not_found():
     import app.db as db_module
     from app.main import app

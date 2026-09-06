@@ -131,7 +131,7 @@ LEFT JOIN receita.cnaes cn
     ON cn.codigo = es.cnae_fiscal_principal
 LEFT JOIN receita.municipios mu
     ON mu.codigo = es.municipio
-WHERE (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv) = $1
+WHERE es.cnpj_basico = $1 AND es.cnpj_ordem = $2 AND es.cnpj_dv = $3
   AND es.identificador_matriz_filial = 1
 """
 
@@ -267,7 +267,7 @@ async def get_company_profile(
     t0 = time.perf_counter()
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(_COMPANY_PROFILE_SQL, normalized)
+        row = await conn.fetchrow(_COMPANY_PROFILE_SQL, normalized[:8], normalized[8:12], normalized[12:])
     query_time_ms = (time.perf_counter() - t0) * 1000
 
     if row is None:
@@ -304,9 +304,9 @@ async def get_company_compliance(
         # Verify company exists first
         exists = await conn.fetchval(
             "SELECT 1 FROM receita.estabelecimentos es"
-            " WHERE (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv) = $1"
+            " WHERE es.cnpj_basico = $1 AND es.cnpj_ordem = $2 AND es.cnpj_dv = $3"
             " AND es.identificador_matriz_filial = 1",
-            normalized,
+            normalized[:8], normalized[8:12], normalized[12:],
         )
         if not exists:
             raise HTTPException(
@@ -448,7 +448,7 @@ async def post_company_batch(
                 })
                 continue
 
-            row = await conn.fetchrow(_COMPANY_PROFILE_SQL, normalized)
+            row = await conn.fetchrow(_COMPANY_PROFILE_SQL, normalized[:8], normalized[8:12], normalized[12:])
             if row is None:
                 results.append({
                     "cnpj": normalized,
