@@ -108,3 +108,42 @@ def test_search_missing_api_key():
     with _make(_FREE_KEY) as (tc, _):
         resp = tc.get("/v1/search")
     assert resp.status_code == 401
+
+
+# ── F-103: query correctness — receita.busca table ────────────────────────────
+
+def test_search_uses_receita_busca_table():
+    """SQL must target receita.busca (not raw estabelecimentos) — F-103 regression guard."""
+    conn = make_mock_conn()
+    conn.fetchrow = AsyncMock(return_value=_FREE_KEY)
+    conn.fetchval = AsyncMock(return_value=0)
+    conn.fetch    = AsyncMock(return_value=[])
+
+    with make_test_client(conn=conn) as (tc, _):
+        resp = tc.get("/v1/search?q=farmacia", headers={"X-API-Key": _FREE_KEY["key"]})
+
+    assert resp.status_code == 200
+    # Verify the SQL string passed to fetchval / fetch contains the corrected table name
+    count_sql_arg = conn.fetchval.call_args[0][0]
+    data_sql_arg  = conn.fetch.call_args[0][0]
+    assert "receita.busca" in count_sql_arg, "count query must use receita.busca"
+    assert "receita.busca" in data_sql_arg,  "data query must use receita.busca"
+    assert "estabelecimentos" not in count_sql_arg.lower(), "must not reference raw estabelecimentos"
+    assert "plainto_tsquery" in data_sql_arg, "text search must use FTS plainto_tsquery"
+
+
+def test_search_has_debt_filter():
+    """has_debt=true filter maps to b.tem_divida = TRUE (not a PGFN subquery)."""
+    conn = make_mock_conn()
+    conn.fetchrow = AsyncMock(return_value=_FREE_KEY)
+    conn.fetchval = AsyncMock(return_value=1)
+    conn.fetch    = AsyncMock(return_value=[_SEARCH_ROW])
+
+    with make_test_client(conn=conn) as (tc, _):
+        resp = tc.get("/v1/search?has_debt=true", headers={"X-API-Key": _FREE_KEY["key"]})
+
+    assert resp.status_code == 200
+    # Verify no subquery to missing pgfn_divida_ativa table
+    count_sql = conn.fetchval.call_args[0][0]
+    assert "pgfn_divida_ativa" not in count_sql, "must not reference removed pgfn_divida_ativa table"
+    assert "tem_divida" in count_sql, "debt filter must use busca.tem_divida column"

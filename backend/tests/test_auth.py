@@ -146,8 +146,8 @@ def test_ratelimit_headers_on_success():
     company_row = {
         "razao_social": "EMPRESA TESTE LTDA",
         "nome_fantasia": None,
-        "situacao_cadastral": "2",
-        "porte_empresa": "03",
+        "situacao_cadastral": 2,
+        "porte": 3,
         "data_inicio_atividade": date(2020, 1, 1),
         "capital_social": 10000,
         "natureza_juridica_desc": "Sociedade Empresária Limitada",
@@ -161,9 +161,9 @@ def test_ratelimit_headers_on_success():
         "cep": "01310000",
         "uf": "SP",
         "municipio_desc": "SAO PAULO",
-        "ddd_telefone_1": "11",
-        "telefone_1": "999999999",
-        "email": "empresa@teste.com",
+        "ddd1": "11",
+        "telefone1": "999999999",
+        "correio_eletronico": "empresa@teste.com",
         "cnae_secundaria_raw": "",
     }
 
@@ -196,14 +196,14 @@ def test_rate_limit_atomic_incr_on_first_request():
     from datetime import date
     key = make_key_row(plan="FREE", requests_this_month=0, requests_limit=50)
     company_row = {
-        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": "2",
-        "porte_empresa": "03", "data_inicio_atividade": date(2020, 1, 1),
+        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": 2,
+        "porte": 3, "data_inicio_atividade": date(2020, 1, 1),
         "capital_social": 10000, "natureza_juridica_desc": "Ltda",
         "cnae_fiscal_principal": "6201501", "cnae_principal_desc": "Dev",
         "tipo_logradouro": "RUA", "logradouro": "X", "numero": "1",
         "complemento": None, "bairro": "Y", "cep": "01001000", "uf": "SP",
-        "municipio_desc": "SAO PAULO", "ddd_telefone_1": "11",
-        "telefone_1": "99999999", "email": "a@b.com", "cnae_secundaria_raw": "",
+        "municipio_desc": "SAO PAULO", "ddd1": "11",
+        "telefone1": "99999999", "correio_eletronico": "a@b.com", "cnae_secundaria_raw": "",
     }
     conn = make_mock_conn()
     conn.fetchrow = AsyncMock(side_effect=[key, company_row])
@@ -224,14 +224,14 @@ def test_rate_limit_window_reset_via_setnx():
 
     from datetime import date
     company_row = {
-        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": "2",
-        "porte_empresa": "03", "data_inicio_atividade": date(2020, 1, 1),
+        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": 2,
+        "porte": 3, "data_inicio_atividade": date(2020, 1, 1),
         "capital_social": 10000, "natureza_juridica_desc": "Ltda",
         "cnae_fiscal_principal": "6201501", "cnae_principal_desc": "Dev",
         "tipo_logradouro": "RUA", "logradouro": "X", "numero": "1",
         "complemento": None, "bairro": "Y", "cep": "01001000", "uf": "SP",
-        "municipio_desc": "SAO PAULO", "ddd_telefone_1": "11",
-        "telefone_1": "99999999", "email": "a@b.com", "cnae_secundaria_raw": "",
+        "municipio_desc": "SAO PAULO", "ddd1": "11",
+        "telefone1": "99999999", "correio_eletronico": "a@b.com", "cnae_secundaria_raw": "",
     }
     conn = make_mock_conn()
     conn.fetchrow = AsyncMock(side_effect=[key, company_row])
@@ -259,14 +259,14 @@ def test_rate_limit_fallback_in_memory():
 
     from datetime import date
     company_row = {
-        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": "2",
-        "porte_empresa": "03", "data_inicio_atividade": date(2020, 1, 1),
+        "razao_social": "TEST", "nome_fantasia": None, "situacao_cadastral": 2,
+        "porte": 3, "data_inicio_atividade": date(2020, 1, 1),
         "capital_social": 10000, "natureza_juridica_desc": "Ltda",
         "cnae_fiscal_principal": "6201501", "cnae_principal_desc": "Dev",
         "tipo_logradouro": "RUA", "logradouro": "X", "numero": "1",
         "complemento": None, "bairro": "Y", "cep": "01001000", "uf": "SP",
-        "municipio_desc": "SAO PAULO", "ddd_telefone_1": "11",
-        "telefone_1": "99999999", "email": "a@b.com", "cnae_secundaria_raw": "",
+        "municipio_desc": "SAO PAULO", "ddd1": "11",
+        "telefone1": "99999999", "correio_eletronico": "a@b.com", "cnae_secundaria_raw": "",
     }
     conn = make_mock_conn()
     # First request succeeds (49 → 50, remaining=0), second is blocked (50 → 51 > 50)

@@ -18,8 +18,8 @@ KEY_ROW = make_key_row(plan="PRO", requests_this_month=0, requests_limit=15000)
 COMPANY_ROW = {
     "razao_social": "EMPRESA DEMO LTDA",
     "nome_fantasia": "DEMO CO",
-    "situacao_cadastral": "2",
-    "porte_empresa": "03",
+    "situacao_cadastral": 2,
+    "porte": 3,
     "data_inicio_atividade": date(2015, 6, 10),
     "capital_social": 50000,
     "natureza_juridica_desc": "Sociedade Empresária Limitada",
@@ -33,9 +33,9 @@ COMPANY_ROW = {
     "cep": "04560000",
     "uf": "SP",
     "municipio_desc": "SAO PAULO",
-    "ddd_telefone_1": "11",
-    "telefone_1": "988887777",
-    "email": "contato@demo.com",
+    "ddd1": "11",
+    "telefone1": "988887777",
+    "correio_eletronico": "contato@demo.com",
     "cnae_secundaria_raw": "6202300,6209100",
 }
 

@@ -5,9 +5,9 @@ Plan gating:
   FREE+   — JSON results
   PRO+    — export=csv (returns text/csv attachment)
 
-TODO(backend): verify table/column names against live schema.
-TODO(backend): has_debt EXISTS subquery is slow on large tables — replace
-               with a denormalized flag column or pre-computed materialized view.
+Uses receita.busca (pre-denormalized, fully indexed) to avoid seq-scans on
+the 72M-row estabelecimentos table.  Text search hits busca_nome_fts (GIN,
+Portuguese FTS); uf/cnae/porte filters hit busca_nicho_uf / busca_nicho_cidade.
 """
 from __future__ import annotations
 
@@ -38,43 +38,15 @@ router = APIRouter(tags=["search"])
 _VALID_SIZES   = {"MEI", "ME", "EPP", "MEDIO", "GRANDE"}
 _VALID_STATUSES = {"ATIVA", "BAIXADA", "SUSPENSA"}
 
-# Receita Federal porte_empresa codes (verify against live schema).
-_SIZE_TO_CODE: dict[str, str] = {
-    "MEI": "00",   # TODO(backend): MEI may be identified by natureza_juridica in live data
-    "ME":  "01",
-    "EPP": "03",
-    "MEDIO": "05",
-    "GRANDE": "05",  # TODO(backend): GRANDE not separately coded in Receita data
+# porte is stored as smallint in receita.busca / receita.empresas
+# MEI is identified by the is_mei boolean flag, not porte
+_SIZE_TO_PORTE: dict[str, int | None] = {
+    "MEI":   None,  # use is_mei = TRUE
+    "ME":    1,
+    "EPP":   3,
+    "MEDIO": 5,
+    "GRANDE": 5,    # RF data doesn't distinguish GRANDE from MEDIO
 }
-_STATUS_TO_CODE: dict[str, str] = {
-    "ATIVA":    "2",
-    "SUSPENSA": "3",
-    "BAIXADA":  "8",
-}
-_STATUS_CODE_TO_LABEL: dict[str, str] = {"2": "ATIVA", "3": "SUSPENSA", "4": "SUSPENSA", "8": "BAIXADA"}
-
-
-# ── SQL builder ────────────────────────────────────────────────────────────────
-
-_BASE_FROM = """
-FROM estabelecimentos es
-JOIN empresas em ON em.cnpj_basico = es.cnpj_basico
-LEFT JOIN cnaes cn ON cn.codigo = es.cnae_fiscal_principal
-LEFT JOIN municipios mu ON mu.codigo = es.municipio
-"""
-
-_SELECT_COLS = """
-    (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv) AS cnpj,
-    COALESCE(NULLIF(TRIM(es.nome_fantasia), ''), em.razao_social) AS name,
-    mu.descricao          AS city,
-    es.uf                 AS state,
-    cn.descricao          AS sector,
-    es.situacao_cadastral AS situacao_cadastral,
-    EXISTS(
-        SELECT 1 FROM pgfn_divida_ativa p
-        WHERE p.cnpj = (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv)
-    ) AS has_debt
-"""
 
 
 def _build_where(
@@ -82,14 +54,13 @@ def _build_where(
     state: Optional[str],
     city: Optional[str],
     sector: Optional[str],
-    size_code: Optional[str],
-    status_code: Optional[str],
+    size: Optional[str],
     has_debt: Optional[bool],
     has_email: Optional[bool],
     has_phone: Optional[bool],
 ) -> tuple[str, list]:
     params: list = []
-    conds = ["es.identificador_matriz_filial = '1'"]
+    conds: list[str] = []
 
     def p(val: Any) -> str:
         params.append(val)
@@ -98,31 +69,31 @@ def _build_where(
     if q:
         ref = p(q)
         conds.append(
-            f"(em.razao_social ILIKE '%%' || {ref} || '%%'"
-            f" OR es.nome_fantasia ILIKE '%%' || {ref} || '%%')"
+            f"to_tsvector('portuguese'::regconfig,"
+            f" COALESCE(b.nome,'')||' '||COALESCE(b.razao_social,''))"
+            f" @@ plainto_tsquery('portuguese'::regconfig, {ref})"
         )
     if state:
-        conds.append(f"es.uf = {p(state.upper())}")
+        conds.append(f"b.uf = {p(state.upper())}")
     if city:
-        conds.append(f"mu.descricao ILIKE '%%' || {p(city)} || '%%'")
+        conds.append(f"b.municipio_nome ILIKE '%%' || {p(city)} || '%%'")
     if sector:
+        # sector may be a CNAE code (integer string) or a text description
         ref = p(sector)
-        conds.append(f"(es.cnae_fiscal_principal = {ref} OR cn.descricao ILIKE '%%' || {ref} || '%%')")
-    if size_code:
-        conds.append(f"em.porte_empresa = {p(size_code)}")
-    if status_code:
-        conds.append(f"es.situacao_cadastral = {p(status_code)}")
-    if has_email:
-        conds.append("(es.email IS NOT NULL AND es.email <> '')")
-    if has_phone:
-        conds.append("(es.ddd_telefone_1 IS NOT NULL AND es.ddd_telefone_1 <> '')")
-    if has_debt:
-        conds.append(
-            "EXISTS(SELECT 1 FROM pgfn_divida_ativa p"
-            " WHERE p.cnpj = (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv))"
-        )
+        conds.append(f"(b.cnae::text = {ref} OR b.cnae_descricao ILIKE '%%' || {ref} || '%%')")
+    if size == "MEI":
+        conds.append("b.is_mei = TRUE")
+    elif size in _SIZE_TO_PORTE and _SIZE_TO_PORTE[size] is not None:
+        conds.append(f"b.porte = {p(_SIZE_TO_PORTE[size])}")
+    if has_email is True:
+        conds.append("(b.email IS NOT NULL AND b.email <> '')")
+    if has_phone is True:
+        conds.append("(b.telefone IS NOT NULL AND b.telefone <> '')")
+    if has_debt is True:
+        conds.append("b.tem_divida = TRUE")
 
-    return " AND ".join(conds), params
+    where = " AND ".join(conds) if conds else "TRUE"
+    return where, params
 
 
 def _row_to_result(r: Any) -> dict:
@@ -137,8 +108,8 @@ def _row_to_result(r: Any) -> dict:
         "city": str(r["city"]) if r["city"] else None,
         "state": str(r["state"]) if r["state"] else None,
         "sector": str(r["sector"]) if r["sector"] else None,
-        "status": _STATUS_CODE_TO_LABEL.get(str(r["situacao_cadastral"]).strip(), "BAIXADA"),
-        "has_debt": bool(r["has_debt"]),
+        "status": "ATIVA",  # busca indexes active establishments
+        "has_debt": bool(r["has_debt"]) if r["has_debt"] is not None else False,
     }
 
 
@@ -186,15 +157,21 @@ async def get_search(
 
     limit = min(limit, 100)
     offset = (page - 1) * limit
-    size_code   = _SIZE_TO_CODE.get(size)   if size   else None
-    status_code = _STATUS_TO_CODE.get(status) if status else None
 
-    where, params = _build_where(q, state, city, sector, size_code, status_code, has_debt, has_email, has_phone)
+    where, params = _build_where(q, state, city, sector, size, has_debt, has_email, has_phone)
 
-    count_sql = f"SELECT COUNT(*) {_BASE_FROM} WHERE {where}"
+    count_sql = f"SELECT COUNT(*) FROM receita.busca b WHERE {where}"
     data_sql = (
-        f"SELECT {_SELECT_COLS} {_BASE_FROM} WHERE {where}"
-        f" ORDER BY em.razao_social"
+        f"SELECT"
+        f"  b.cnpj,"
+        f"  COALESCE(NULLIF(TRIM(b.nome),''), b.razao_social) AS name,"
+        f"  b.municipio_nome AS city,"
+        f"  b.uf AS state,"
+        f"  b.cnae_descricao AS sector,"
+        f"  b.tem_divida AS has_debt"
+        f" FROM receita.busca b"
+        f" WHERE {where}"
+        f" ORDER BY b.score DESC"
         f" LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
     )
     data_params = params + [limit, offset]

@@ -27,8 +27,8 @@ _BY_STATE_SQL = """
 SELECT
     es.uf    AS state,
     COUNT(*) AS count
-FROM estabelecimentos es
-WHERE es.identificador_matriz_filial = '1'
+FROM receita.estabelecimentos es
+WHERE es.identificador_matriz_filial = 1
   {state_filter}
 GROUP BY es.uf
 ORDER BY count DESC
@@ -39,9 +39,9 @@ SELECT
     cn.codigo    AS cnae,
     cn.descricao AS description,
     COUNT(*)     AS count
-FROM estabelecimentos es
-LEFT JOIN cnaes cn ON cn.codigo = es.cnae_fiscal_principal
-WHERE es.identificador_matriz_filial = '1'
+FROM receita.estabelecimentos es
+LEFT JOIN receita.cnaes cn ON cn.codigo = es.cnae_fiscal_principal
+WHERE es.identificador_matriz_filial = 1
   {sector_filter}
 GROUP BY cn.codigo, cn.descricao
 ORDER BY count DESC

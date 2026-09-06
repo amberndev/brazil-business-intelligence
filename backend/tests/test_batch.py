@@ -15,8 +15,8 @@ _FREE_KEY    = make_key_row(plan="FREE", requests_limit=50)
 _COMPANY_ROW = {
     "razao_social": "EMPRESA DEMO LTDA",
     "nome_fantasia": "DEMO CO",
-    "situacao_cadastral": "2",
-    "porte_empresa": "03",
+    "situacao_cadastral": 2,
+    "porte": 3,
     "data_inicio_atividade": date(2015, 6, 10),
     "capital_social": 50000,
     "natureza_juridica_desc": "Soc. Emp. Limitada",
@@ -30,9 +30,9 @@ _COMPANY_ROW = {
     "cep": "01001000",
     "uf": "SP",
     "municipio_desc": "SAO PAULO",
-    "ddd_telefone_1": "11",
-    "telefone_1": "999999999",
-    "email": "a@b.com",
+    "ddd1": "11",
+    "telefone1": "999999999",
+    "correio_eletronico": "a@b.com",
     "cnae_secundaria_raw": "",
 }
 

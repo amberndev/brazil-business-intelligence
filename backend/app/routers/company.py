@@ -66,7 +66,8 @@ def format_cnpj(digits: str) -> str:
 # ── Status / size maps ────────────────────────────────────────────────────────
 
 _STATUS_MAP = {"1": "BAIXADA", "2": "ATIVA", "3": "SUSPENSA", "4": "SUSPENSA", "8": "BAIXADA"}
-_SIZE_MAP   = {"01": "ME", "03": "EPP", "05": "MEDIO"}
+# porte is stored as smallint (1=ME, 3=EPP, 5=MEDIO/GRANDE) in receita.empresas
+_SIZE_MAP   = {"1": "ME", "3": "EPP", "5": "MEDIO"}
 # TODO(backend): MEI identified by natureza_juridica = '2135' or porte '01' in some datasets.
 # TODO(backend): GRANDE not available in Receita porte field; derive from revenue/employees if needed.
 
@@ -103,7 +104,7 @@ SELECT
     em.razao_social,
     es.nome_fantasia,
     es.situacao_cadastral,
-    em.porte_empresa,
+    em.porte,
     es.data_inicio_atividade,
     em.capital_social,
     nj.descricao           AS natureza_juridica_desc,
@@ -117,23 +118,21 @@ SELECT
     es.cep,
     es.uf,
     mu.descricao           AS municipio_desc,
-    es.ddd_telefone_1,
-    es.telefone_1,
-    es.email,
-    -- Secondary CNAEs stored as comma-separated codes in some datasets.
-    -- TODO(backend): join estabelecimentos_cnae if available; fall back to empty list.
-    COALESCE(es.cnae_fiscal_secundaria, '') AS cnae_secundaria_raw
-FROM estabelecimentos es
-JOIN empresas em
+    es.ddd1,
+    es.telefone1,
+    es.correio_eletronico,
+    ARRAY_TO_STRING(COALESCE(es.cnae_fiscal_secundaria, '{}'), ',') AS cnae_secundaria_raw
+FROM receita.estabelecimentos es
+JOIN receita.empresas em
     ON em.cnpj_basico = es.cnpj_basico
-LEFT JOIN naturezas_juridicas nj
+LEFT JOIN receita.naturezas_juridicas nj
     ON nj.codigo = em.natureza_juridica
-LEFT JOIN cnaes cn
+LEFT JOIN receita.cnaes cn
     ON cn.codigo = es.cnae_fiscal_principal
-LEFT JOIN municipios mu
+LEFT JOIN receita.municipios mu
     ON mu.codigo = es.municipio
 WHERE (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv) = $1
-  AND es.identificador_matriz_filial = '1'
+  AND es.identificador_matriz_filial = 1
 """
 
 
@@ -166,7 +165,7 @@ def _build_profile(row: Any, cnpj: str) -> dict:
         "razao_social": _or_none(row["razao_social"]) or "",
         "nome_fantasia": _or_none(row["nome_fantasia"]),
         "status": _map_status(row["situacao_cadastral"]),
-        "size": _map_size(row["porte_empresa"]),
+        "size": _map_size(row["porte"]),
         "opened_at": opened_at,
         "legal_nature": _or_none(row["natureza_juridica_desc"]),
         "share_capital": share_capital,
@@ -184,8 +183,8 @@ def _build_profile(row: Any, cnpj: str) -> dict:
             "secondary_cnae": secondary,
         },
         "contact": {
-            "phone": _format_phone(row["ddd_telefone_1"], row["telefone_1"]),
-            "email": _or_none(row["email"]),
+            "phone": _format_phone(row["ddd1"], row["telefone1"]),
+            "email": _or_none(row["correio_eletronico"]),
         },
     }
 
@@ -195,27 +194,19 @@ def _build_profile(row: Any, cnpj: str) -> dict:
 
 _PGFN_SQL = """
 SELECT
-    COUNT(*)              AS records_count,
-    COALESCE(SUM(valor_consolidado), 0) AS total_amount
-FROM pgfn_divida_ativa
+    inscricoes            AS records_count,
+    COALESCE(valor_total, 0) AS total_amount
+FROM pgfn.divida_por_cnpj
 WHERE cnpj = $1
 """
 
 _CGU_SQL = """
 SELECT
-    tipo_sancao          AS type,
-    descricao_fundamentacao AS description,
-    data_inicio_sancao   AS start_date,
-    data_final_sancao    AS end_date
-FROM cgu_ceis
-WHERE cnpj = $1
-UNION ALL
-SELECT
-    tipo_sancao,
-    descricao_fundamentacao,
-    data_inicio_sancao,
-    data_final_sancao
-FROM cgu_cnep
+    categoria            AS type,
+    fundamentacao        AS description,
+    data_inicio          AS start_date,
+    data_final           AS end_date
+FROM cgu.sancao_empresa
 WHERE cnpj = $1
 """
 
@@ -312,9 +303,9 @@ async def get_company_compliance(
     async with pool.acquire() as conn:
         # Verify company exists first
         exists = await conn.fetchval(
-            "SELECT 1 FROM estabelecimentos es"
+            "SELECT 1 FROM receita.estabelecimentos es"
             " WHERE (es.cnpj_basico || es.cnpj_ordem || es.cnpj_dv) = $1"
-            " AND es.identificador_matriz_filial = '1'",
+            " AND es.identificador_matriz_filial = 1",
             normalized,
         )
         if not exists:
@@ -339,14 +330,14 @@ async def get_company_compliance(
 
 _SHAREHOLDERS_SQL = """
 SELECT
-    s.nome_do_socio                         AS name,
+    s.nome_socio                            AS name,
     s.cnpj_cpf_do_socio                     AS document_raw,
     qs.descricao                            AS role,
     s.data_entrada_sociedade                AS since_raw
-FROM socios s
-LEFT JOIN qualificacoes_socios qs ON qs.codigo = s.qualificacao_do_socio
+FROM receita.socios s
+LEFT JOIN receita.qualificacoes_socios qs ON qs.codigo = s.qualificacao_do_socio
 WHERE s.cnpj_basico = $1
-ORDER BY s.nome_do_socio
+ORDER BY s.nome_socio
 """
 # TODO(backend): verify socios / qualificacoes_socios column names against live schema.
 # TODO(backend): participation_pct — not available in Receita Federal data; left null.
@@ -397,8 +388,8 @@ async def get_company_shareholders(
     pool = await get_pool()
     async with pool.acquire() as conn:
         exists = await conn.fetchval(
-            "SELECT 1 FROM estabelecimentos es"
-            " WHERE es.cnpj_basico = $1 AND es.identificador_matriz_filial = '1'",
+            "SELECT 1 FROM receita.estabelecimentos es"
+            " WHERE es.cnpj_basico = $1 AND es.identificador_matriz_filial = 1",
             cnpj_basico,
         )
         if not exists:
