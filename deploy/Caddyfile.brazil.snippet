@@ -1,0 +1,15 @@
+brazil.ambern.dev {
+    # /api/* → backend (strips /api prefix so backend /v1/... routes resolve)
+    # Prod URL chain: client → https://brazil.ambern.dev/api/v1/... →
+    #   handle_path strips /api → backend receives /v1/...  ✓
+    handle_path /api/* {
+        reverse_proxy 127.0.0.1:8100
+    }
+
+    # All other paths → Next.js frontend
+    handle {
+        reverse_proxy 127.0.0.1:3100
+    }
+
+    # Automatic TLS via Let's Encrypt (Caddy default)
+}

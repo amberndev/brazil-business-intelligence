@@ -1,0 +1,22 @@
+[Unit]
+Description=Brazil Business Intelligence Web (Next.js)
+Documentation=https://brazil.ambern.dev
+After=network-online.target bbi-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/brazil-business-intelligence/frontend
+EnvironmentFile=/opt/brazil-business-intelligence/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/local/bin/node \
+    /opt/brazil-business-intelligence/frontend/node_modules/.bin/next \
+    start --port 3100 --hostname 127.0.0.1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bbi-web
+
+[Install]
+WantedBy=multi-user.target

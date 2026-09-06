@@ -1,0 +1,23 @@
+[Unit]
+Description=Brazil Business Intelligence API (uvicorn)
+Documentation=https://brazil.ambern.dev/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/brazil-business-intelligence/backend
+EnvironmentFile=/opt/brazil-business-intelligence/.env
+ExecStart=/opt/brazil-business-intelligence/backend/.venv/bin/uvicorn \
+    app.main:app \
+    --host 127.0.0.1 \
+    --port 8100 \
+    --workers 2
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bbi-api
+
+[Install]
+WantedBy=multi-user.target
