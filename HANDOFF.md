@@ -49,15 +49,19 @@ Todo o trabalho em andamento foi commitado e enviado ao `origin/master`. Nada fi
 - Novos specs Playwright: `frontend/tests/key-validation.spec.ts`, `frontend/tests/search-ux.spec.ts`.
 - `frontend/public/assets/` adicionado.
 
-### Não commitado de propósito
-- `backend/app/routers/search.py.new` — artefato obsoleto de um agente (220 linhas, superado pelo `search.py` atual de 237). Existe só na máquina A; pode ser apagado.
-- `.codex/`, `frontend/test-results/`, e arquivos de 0 byte criados por redirecionamentos de shell quebrados (`bool`, `HTTPS`, `limit`, `backend/str`, `frontend/should`). Lixo, ignorar/apagar.
+### Limpeza (2026-09-07)
+- `backend/app/routers/search.py.new` **apagado** — era a versão anterior ao fix (sem detecção de CNPJ, `municipio_nome ILIKE`, `has_email is True`), superada pelo `search.py` atual.
+- Arquivos de 0 byte de redirecionamento de shell quebrado (`HTTPS`, `bool`, `limit`, `backend/str`, `frontend/should`) **apagados e a deleção commitada** — estavam versionados por acidente.
+- `frontend/test-results/` passou para o `.gitignore`.
+- `.codex/` continua fora do git de propósito (config local do Codex CLI).
 
 ---
 
 ## 3. Board de bugs — `TASK/items/`
 
-O board estava **dividido em dois lugares**: `TASK/items/` do repo (versionado) e um board solto em `E:\Overclok\TASK\items` (fora de qualquer git, gerado pela rodada de QA das 17:24). **Foram consolidados aqui nesta sessão** — F-105/F-106/F-107/F-108/F-400 foram copiados para o repo, e o re-teste de QA das 17:24 foi anexado ao fim de F-102 e F-104. Nada mais vive fora do git.
+O board estava **dividido em dois lugares**: `TASK/items/` do repo (versionado) e um board solto em `E:\Overclok\TASK\items` (fora de qualquer git, gerado pela rodada de QA das 17:24). **Foram consolidados aqui** — F-105/F-106/F-107/F-108/F-400 copiados para o repo, e a rodada de QA das 17:24 anexada ao fim de F-102, F-103 e F-104. O board solto foi apagado; `TASK/items/` do repo é a única fonte agora.
+
+O apêndice de QA no fim do **F-103** vale a leitura: lista exatamente quais formas de query estouravam o timeout (sem params, `?limit=1`, `?state=SP`, `?sector=`, `?has_email=true`, `q` pouco seletivo). Como a verificação das 20:20 só exercitou `?limit=1`, essa lista é o roteiro do re-teste.
 
 Ordem dos fatos do dia (importa para não ler status errado):
 `12:13` board inicial → `17:24` rodada de QA reabre F-102/F-103 → **`20:20` dev corrige e verifica F-103/F-105 em produção** → `20:40–21:10` trabalho de frontend (Landing, api.ts).
