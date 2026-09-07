@@ -132,7 +132,6 @@ LEFT JOIN receita.cnaes cn
 LEFT JOIN receita.municipios mu
     ON mu.codigo = es.municipio
 WHERE es.cnpj_basico = $1 AND es.cnpj_ordem = $2 AND es.cnpj_dv = $3
-  AND es.identificador_matriz_filial = 1
 """
 
 

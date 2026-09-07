@@ -1,29 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --accent: #1d4ed8;
-  --accent-hover: #1e40af;
-  --border: #e2e8f0;
-  --card: #f8fafc;
+  --background: #fbf8f1;
+  --foreground: #1e232b;
+  --muted: #5f5b55;
+  --accent: #b54719;
+  --accent-hover: #963913;
+  --border: #d9d2c6;
+  --card: #f4efe4;
   --success: #16a34a;
   --warning: #b45309;
   --danger: #dc2626;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-    --muted: #94a3b8;
-    --accent: #3b82f6;
-    --accent-hover: #60a5fa;
-    --border: #1e293b;
-    --card: #1e293b;
-  }
-}
+
 
 body {
   background: var(--background);
@@ -38,4 +28,28 @@ body {
 
 code, pre, .mono {
   font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+}
+
+:root { --brand-orange: #e88e2f; --brand-gold: #f8b53f; }
+#hero {
+  background: linear-gradient(90deg, #fbf8f1f5, #fbf8f1d9), url("/assets/ambern-hero-background.webp") center / cover;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  margin: 2rem auto !important;
+  box-shadow: 0 16px 48px #1e232b0a;
+}
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 3px solid var(--brand-orange);
+  outline-offset: 4px;
+}
+@media (max-width: 640px) {
+  #site-nav { padding: 1rem !important; gap: 0.75rem; flex-wrap: wrap; }
+  #site-nav > div { gap: 0.75rem !important; }
+  #hero { border-radius: 0; margin: 0 auto !important; padding: 4rem 1.25rem !important; }
+}
+
+@media (max-width: 760px) {
+  .company-search-layout { flex-direction: column; }
+  .company-search-layout #search-filters { width: 100% !important; border-right: 0 !important; border-bottom: 1px solid var(--border); }
+  .company-search-layout #results-pagination { flex-wrap: wrap; gap: 1rem; }
 }

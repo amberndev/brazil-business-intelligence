@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import time
+import unicodedata
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -66,7 +68,11 @@ def _build_where(
         params.append(val)
         return f"${len(params)}"
 
-    if q:
+    q = q.strip() if q else None
+    digits = re.sub(r"[.\s/-]", "", q or "")
+    if len(digits) == 14 and digits.isascii() and digits.isdigit():
+        conds.append(f"b.cnpj = {p(digits)}")
+    elif q:
         ref = p(q)
         conds.append(
             f"to_tsvector('portuguese'::regconfig,"
@@ -76,7 +82,10 @@ def _build_where(
     if state:
         conds.append(f"b.uf = {p(state.upper())}")
     if city:
-        conds.append(f"b.municipio_nome ILIKE '%%' || {p(city)} || '%%'")
+        city = "".join(c for c in unicodedata.normalize("NFD", city.strip())
+                       if not unicodedata.combining(c))
+        conds.append(f"b.municipio IN (SELECT codigo FROM receita.municipios"
+                     f" WHERE descricao ILIKE '%' || {p(city)} || '%')")
     if sector:
         # sector may be a CNAE code (integer string) or a text description
         ref = p(sector)
@@ -85,12 +94,15 @@ def _build_where(
         conds.append("b.is_mei = TRUE")
     elif size in _SIZE_TO_PORTE and _SIZE_TO_PORTE[size] is not None:
         conds.append(f"b.porte = {p(_SIZE_TO_PORTE[size])}")
-    if has_email is True:
-        conds.append("(b.email IS NOT NULL AND b.email <> '')")
-    if has_phone is True:
-        conds.append("(b.telefone IS NOT NULL AND b.telefone <> '')")
-    if has_debt is True:
-        conds.append("b.tem_divida = TRUE")
+    if has_email is not None:
+        conds.append(f"(NULLIF(TRIM(b.email), '') IS NOT NULL) = {p(has_email)}")
+    if has_phone is not None:
+        conds.append(f"(COALESCE(NULLIF(TRIM(b.telefone), ''),"
+                     f" NULLIF(TRIM(b.telefone_2), '')) IS NOT NULL) = {p(has_phone)}")
+    if has_debt is not None:
+        # Keep the literal TRUE predicate compatible with busca_divida's
+        # partial index. NULL is unknown and matches neither boolean filter.
+        conds.append("b.tem_divida = TRUE" if has_debt else "b.tem_divida = FALSE")
 
     where = " AND ".join(conds) if conds else "TRUE"
     return where, params
@@ -108,8 +120,8 @@ def _row_to_result(r: Any) -> dict:
         "city": str(r["city"]) if r["city"] else None,
         "state": str(r["state"]) if r["state"] else None,
         "sector": str(r["sector"]) if r["sector"] else None,
-        "status": "ATIVA",  # busca indexes active establishments
-        "has_debt": bool(r["has_debt"]) if r["has_debt"] is not None else False,
+        "status": "ATIVA",  # ETL 006/022 includes only situacao_cadastral = 2
+        "has_debt": bool(r["has_debt"]) if r["has_debt"] is not None else None,
     }
 
 
@@ -123,8 +135,8 @@ async def get_search(
     city:      Optional[str]  = Query(None),
     sector:    Optional[str]  = Query(None),
     size:      Optional[str]  = Query(None),
-    status:    Optional[str]  = Query(None),
-    has_debt:  Optional[bool] = Query(None),
+    status:    Optional[str]  = Query(None, description="Only ATIVA is supported: the search dataset contains active establishments only."),
+    has_debt:  Optional[bool] = Query(None, description="Filter the dataset's recorded debt flag. Unknown values match neither true nor false."),
     has_email: Optional[bool] = Query(None),
     has_phone: Optional[bool] = Query(None),
     page:      int            = Query(1, ge=1),
@@ -142,6 +154,11 @@ async def get_search(
         raise HTTPException(
             status_code=422,
             detail={"code": "invalid_filter", "message": f"Invalid status value '{status}'. Valid: {', '.join(sorted(_VALID_STATUSES))}.", "status": 422},
+        )
+    if status is not None and status != "ATIVA":
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "unsupported_filter", "message": "Search covers active establishments only. Only status=ATIVA is supported; BAIXADA and SUSPENSA are unavailable in this dataset.", "status": 422},
         )
 
     # ── export=csv requires PRO+ ──
@@ -171,7 +188,7 @@ async def get_search(
         f"  b.tem_divida AS has_debt"
         f" FROM receita.busca b"
         f" WHERE {where}"
-        f" ORDER BY b.score DESC"
+        f" ORDER BY {('b.score DESC' if q else 'b.cnpj')}"
         f" LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
     )
     data_params = params + [limit, offset]

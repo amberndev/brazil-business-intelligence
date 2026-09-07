@@ -79,7 +79,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "160px 1fr",
+        gridTemplateColumns: "minmax(100px, 30%) minmax(0, 1fr)",
         gap: "0.5rem",
         padding: "0.4rem 0",
         borderBottom: "1px solid var(--border)",
@@ -118,31 +118,31 @@ export default function CompanyPage() {
       return;
     }
 
-    // Fetch all three in parallel
-    fetchCompanyProfile(cnpj).then((r) => {
-      if (r.ok) {
-        setProfile({ status: "ok", data: r.data });
-        document.title = `${r.data.razao_social} — Brazil Business Intelligence`;
-      } else {
+    let active = true;
+    setNoKey(false);
+    setProfile({ status: "loading" });
+    setCompliance({ status: "idle" });
+    setShareholders({ status: "idle" });
+    fetchCompanyProfile(cnpj).then(async (r) => {
+      if (!active) return;
+      if (!r.ok) {
         setProfile({ status: "error", message: r.error.message, code: r.error.code });
+        return;
       }
+      setProfile({ status: "ok", data: r.data });
+      document.title = `${r.data.razao_social} - Brazil Business Intelligence`;
+      setCompliance({ status: "loading" });
+      setShareholders({ status: "loading" });
+      await Promise.all([
+        fetchCompanyCompliance(cnpj).then((result) => {
+          if (active) setCompliance(result.ok ? { status: "ok", data: result.data } : { status: "error", message: result.error.message, code: result.error.code });
+        }),
+        fetchCompanyShareholders(cnpj).then((result) => {
+          if (active) setShareholders(result.ok ? { status: "ok", data: result.data } : { status: "error", message: result.error.message, code: result.error.code });
+        }),
+      ]);
     });
-
-    fetchCompanyCompliance(cnpj).then((r) => {
-      if (r.ok) {
-        setCompliance({ status: "ok", data: r.data });
-      } else {
-        setCompliance({ status: "error", message: r.error.message, code: r.error.code });
-      }
-    });
-
-    fetchCompanyShareholders(cnpj).then((r) => {
-      if (r.ok) {
-        setShareholders({ status: "ok", data: r.data });
-      } else {
-        setShareholders({ status: "error", message: r.error.message, code: r.error.code });
-      }
-    });
+    return () => { active = false; };
   }, [cnpj]);
 
   const p = profile.status === "ok" ? profile.data : null;
@@ -173,8 +173,8 @@ export default function CompanyPage() {
   ) : profile.status === "loading" ? (
     <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: 0 }}>Loading…</p>
   ) : profile.status === "error" ? (
-    <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: 0 }}>
-      {isNotFound ? "Company not found." : profile.message}
+    <p role="alert" style={{ color: "var(--muted)", fontSize: "0.875rem", margin: 0 }}>
+      {isNotFound ? "Company not found. Check the CNPJ or return to search." : profile.message}
     </p>
   ) : null;
 
@@ -211,6 +211,7 @@ export default function CompanyPage() {
         {!p && profileNote}
       </section>
 
+      {profile.status !== "error" && <>
       {/* Overview */}
       <SectionCard id="company-overview" title="Overview">
         {p ? (
@@ -437,6 +438,7 @@ export default function CompanyPage() {
           </div>
         )}
       </SectionCard>
+      </>}
     </div>
   );
 }

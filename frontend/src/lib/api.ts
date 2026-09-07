@@ -82,20 +82,32 @@ export async function fetchHealth(): Promise<HealthResponse | null> {
   }
 }
 
-/** Validates a key by calling the health-adjacent path; returns meta on success. */
+/** Validate using key metadata without running a company search. */
 export async function validateApiKey(
   key: string
 ): Promise<{ ok: true; plan: string; remaining: number } | { ok: false; message: string }> {
-  // We validate by attempting a lightweight authenticated call (company search with limit=1)
-  const result = await apiFetch<SearchResponse>(
-    "/v1/search?limit=1",
-    {},
-    key
-  );
-  if (result.ok) {
-    return { ok: true, plan: result.meta.plan, remaining: result.meta.requests_remaining };
+  try {
+    const response = await fetch(`${BASE_URL}/v1/keys/me`, {
+      headers: { "X-API-Key": key },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      return { ok: false, message: body?.error?.message ?? "Key validation failed." };
+    }
+    const info = await response.json();
+    if (typeof info.plan !== "string" ||
+        typeof info.requests_limit !== "number" ||
+        typeof info.requests_this_month !== "number") {
+      return { ok: false, message: "Invalid key metadata returned by the API." };
+    }
+    return {
+      ok: true,
+      plan: info.plan,
+      remaining: Math.max(0, info.requests_limit - info.requests_this_month),
+    };
+  } catch {
+    return { ok: false, message: "Cannot reach the API server." };
   }
-  return { ok: false, message: result.error.message };
 }
 
 // ---- POST /v1/keys — self-serve FREE key creation ----
@@ -152,12 +164,13 @@ export async function fetchCompanyShareholders(
 }
 
 export async function fetchSearch(
-  params: Record<string, string | number | boolean>
+  params: Record<string, string | number | boolean>,
+  signal?: AbortSignal
 ): Promise<FetchResult<SearchResponse>> {
   const qs = new URLSearchParams(
     Object.entries(params).map(([k, v]) => [k, String(v)])
   ).toString();
-  return apiFetch<SearchResponse>(`/v1/search?${qs}`);
+  return apiFetch<SearchResponse>(`/v1/search?${qs}`, { signal });
 }
 
 export async function fetchBatch(
